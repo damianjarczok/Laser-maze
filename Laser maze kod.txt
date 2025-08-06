@@ -1,0 +1,195 @@
+#include <Keyboard.h>
+
+const int buttonPins[] = {A0, A1, A2, A3, A4, A5}; // Przyciski od A0 do A5
+const int ledPins[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};    // Diody LED od 0 do 7 (dodano D4 jako pin 7)
+int mode = 0;                                      // Zmienna do przechowywania trybu
+bool isConfirmed = false;                          // Czy wybór poziomu trudności został potwierdzony
+int a5PressCount = 0;                              // Licznik naciśnięć przycisku A5
+bool lastD5State = LOW;                            // Zmienna do śledzenia poprzedniego stanu pinu D5
+bool a0ButtonPressed = false;
+bool a1ButtonPressed = false;
+bool a2a3a4ButtonPressed = false;
+int d5StateChangeCount = 0;                        // Licznik zmian stanu diody D5    
+
+void setup() {
+  Keyboard.begin();
+  delay(500);
+  Keyboard.press(KEY_F3);
+  Keyboard.release(KEY_F3);
+  Keyboard.press(KEY_F5);
+  Keyboard.release(KEY_F5);
+  // Konfiguracja przycisków
+  for (int i = 0; i < 6; i++) {
+    pinMode(buttonPins[i], INPUT_PULLUP);
+  }
+
+  // Konfiguracja diod LED
+  for (int i = 0; i < 8; i++) {  // Liczba diod LED to 8 (dodano D4)
+    pinMode(ledPins[i], OUTPUT);
+  }
+
+  pinMode(ledPins[8], OUTPUT);
+
+  // Wysłanie klawisza F5 zaraz po uruchomieniu programu
+  Keyboard.press(KEY_F5);
+  Keyboard.release(KEY_F5);
+}
+
+void loop() {
+
+  // Sprawdzenie, czy przycisk A0 został naciśnięty
+  if (a2a3a4ButtonPressed == true && !isConfirmed && digitalRead(buttonPins[0]) == LOW) {
+    a0ButtonPressed = true;
+    isConfirmed = true;
+
+    // Włącz D5
+    digitalWrite(ledPins[5], HIGH);
+    delay(200);
+    // W trybie trudnym włącz również D7
+    if (mode == 3) {
+      digitalWrite(ledPins[7], HIGH);
+    }
+  }
+
+  // Sprawdzenie, czy pin D5 zmienił stan
+  bool currentD5State = digitalRead(ledPins[5]);
+  if (currentD5State != lastD5State) {
+    Keyboard.press(' ');
+    Keyboard.release(' ');
+    lastD5State = currentD5State;
+    d5StateChangeCount++;
+
+    // Synchronizacja diody D7 z D5 w trybie trudnym
+    if (mode == 3) {
+      digitalWrite(ledPins[7], currentD5State); // Zapalanie/gaszenie diody D7
+    }
+
+    if (d5StateChangeCount == 2 && a1ButtonPressed == false) {
+      digitalWrite(ledPins[4], HIGH); // Zapalanie diody D4
+      digitalWrite(6, HIGH);
+      delay(1000);
+      digitalWrite(6, LOW);
+      while (true) {} // Nieskończona pętla blokująca program
+    }
+    if (a1ButtonPressed == true) {
+      digitalWrite(ledPins[8], HIGH); // Zapalanie diody D4
+      while (true) {} // Nieskończona pętla blokująca program
+    }
+  }
+
+  if (!isConfirmed) {
+    // Sprawdzenie, który przycisk został naciśnięty
+    if (digitalRead(buttonPins[2]) == LOW) {
+      a2a3a4ButtonPressed = true;
+      mode = 1; // Tryb prosty
+    } else if (digitalRead(buttonPins[3]) == LOW) {
+      a2a3a4ButtonPressed = true;
+      mode = 2; // Tryb średni
+    } else if (digitalRead(buttonPins[4]) == LOW) {
+      a2a3a4ButtonPressed = true;
+      mode = 3; // Tryb trudny
+    }
+  }
+
+  // Potwierdzenie wyboru i załączenie diod
+  if (a2a3a4ButtonPressed == true && !isConfirmed && digitalRead(buttonPins[0]) == LOW) {
+    a0ButtonPressed = true; // Ustawienie flagi, że przycisk A0 został naciśnięty
+    isConfirmed = true;
+    digitalWrite(ledPins[3], HIGH); // Zapalanie diody D3
+    digitalWrite(ledPins[5], HIGH); // Zapalanie diody D5
+  }
+
+  // Obsługa przycisku A5 po naciśnięciu przycisku A0
+  if (a2a3a4ButtonPressed == true && a0ButtonPressed && digitalRead(buttonPins[5]) == HIGH) {
+    if (mode == 1) {
+      a5PressCount++;
+      if (a5PressCount < 3) {
+        blinkLED(3, a5PressCount); // Gaszenie diody D3 odpowiednią liczbę razy
+      } else {
+        digitalWrite(ledPins[3], LOW);
+        digitalWrite(ledPins[5], LOW);
+      }
+    } else if (mode == 2 || mode == 3) {
+      digitalWrite(ledPins[3], LOW);
+      digitalWrite(ledPins[5], LOW);
+    }
+  }
+
+  // Zgaszenie diod D3 i D5 gdy naciśnięty jest A1
+  if (digitalRead(buttonPins[1]) == LOW) {
+    a1ButtonPressed = true;
+    digitalWrite(ledPins[3], LOW);
+    digitalWrite(ledPins[5], LOW);
+  }
+
+  switch (mode) {
+    case 1:
+      easyMode();
+      break;
+    case 2:
+      mediumMode();
+      break;
+    case 3:
+      hardMode();
+      break;
+    default:
+      defaultMode();
+      break;
+  }
+}
+
+void blinkLED(int ledPin, int count) {
+  int delayTime;
+
+  if (count == 1) {
+    // Jedno mignięcie trwające 2 sekundy
+    delayTime = 2000;
+    digitalWrite(ledPin, LOW);
+    digitalWrite(6, HIGH);
+    delay(delayTime);
+    digitalWrite(6, LOW);
+    digitalWrite(ledPin, HIGH);
+  } else if (count == 2) {
+    // Dwa mignięcia, każde po 500 ms, aby sumarycznie trwały 2 sekundy
+    delayTime = 500;
+    for (int i = 0; i < 2; i++) {
+      digitalWrite(ledPin, LOW);
+      digitalWrite(6, HIGH);
+      delay(delayTime);
+      digitalWrite(6, LOW);
+      digitalWrite(ledPin, HIGH);
+      if (i < 1) { // Przerwa między mignięciami
+        delay(delayTime);  
+      }
+    }
+  }
+}
+
+void lightLED(int led) {
+  // Wyłącz wszystkie LED
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(ledPins[i], LOW);
+  }
+  // Zapal wybraną diodę LED
+  digitalWrite(ledPins[led], HIGH);
+}
+
+void easyMode() {
+  lightLED(0);
+  // Logika dla trybu prostego
+}
+
+void mediumMode() {
+  lightLED(1);
+  // Logika dla trybu średniego
+}
+
+void hardMode() {
+  lightLED(2);
+  // Logika dla trybu trudnego
+}
+
+void defaultMode() {
+  // Logika dla domyślnego stanu (żaden tryb nie jest wybrany)
+  // Możesz tu dodać coś, co się wydarzy, gdy żaden tryb nie jest aktywny
+}
