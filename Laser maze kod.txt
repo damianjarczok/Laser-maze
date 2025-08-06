@@ -191,5 +191,4 @@ void hardMode() {
 
 void defaultMode() {
   // Logika dla domyślnego stanu (żaden tryb nie jest wybrany)
-  // Możesz tu dodać coś, co się wydarzy, gdy żaden tryb nie jest aktywny
 }
